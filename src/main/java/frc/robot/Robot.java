@@ -6,15 +6,13 @@ package frc.robot;
 
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
-
+import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.PneumaticsModuleType;
 import edu.wpi.first.wpilibj.Solenoid;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
-import edu.wpi.first.wpilibj.motorcontrol.MotorControllerGroup;
-import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
@@ -26,15 +24,14 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
  */
 public class Robot extends TimedRobot {
   //public static final Solenoid BREAK = new Solenoid(PneumaticsModuleType.CTREPCM, 5);
-  private final boolean isControllerMode = true;
-  private final boolean hasLights = true;
-
-  private final double kCreepSpeed = 0.6;
-  private final double kBaseSpeed = 0.7;
-  private Lights lightInstance;
-  private DifferentialDrive driveInstance;
-  private XboxController input_controller;
-  private Joystick input;
+  private final double baseSpeed = 0.7; //Base robot speed
+  private final double creepSpeed = 0.5; // Speed of the robot in creep mode
+  private DifferentialDrive driveInstance; // Create a differenetial drive object
+  private XboxController controllerInput; // Create a controller input
+  double speedMultiplier = 1; // Speed multiplier for flip drive
+  double creepMultiplier; 
+  double leftAxisController;
+  double rightAxisController;
 
   /**
    * This function is run when the robot is first started up and should be used for any
@@ -42,28 +39,23 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotInit() {
-    /*
-    CANSparkMax upLeft = new CANSparkMax(3, MotorType.kBrushless);
-    CANSparkMax downLeft = new CANSparkMax(4, MotorType.kBrushless);
-    CANSparkMax upRight = new CANSparkMax(5, MotorType.kBrushless);
-    CANSparkMax downRight = new CANSparkMax(6, MotorType.kBrushless);
-    */
-    PWMSparkMax upLeft = new PWMSparkMax(0);
-    PWMSparkMax downLeft = new PWMSparkMax(1);
-    PWMSparkMax upRight = new PWMSparkMax(2);
-    PWMSparkMax downRight = new PWMSparkMax(3);
-
-    MotorControllerGroup left = new MotorControllerGroup(upLeft, downLeft);
-    MotorControllerGroup right = new MotorControllerGroup(upRight, downRight);
-    driveInstance = new DifferentialDrive(left, right);
-
-    if(isControllerMode) {
-      input_controller = new XboxController(0);
-      if(hasLights) lightInstance = new Lights(input_controller, 9, 56);
-      return;
-    }
-    
-    input = new Joystick(0);
+    // Motor setup start
+    // PWMSparkMax leftMotor = new PWMSparkMax(0); // PWM Motor motor setup
+    // PWMSparkMax leftFollowerMotor = new PWMSparkMax(1);
+    // PWMSparkMax rightMotor = new PWMSparkMax(2);
+    // PWMSparkMax rightFollowerMotor = new PWMSparkMax(3);
+    // leftMotor.addFollower(leftFollowerMotor); // make the leftfollower motor follow the main left motor
+    // rightMotor.addFollower(rightFollowerMotor);
+    CANSparkMax leftMotor = new CANSparkMax(4, MotorType.kBrushed); // CAN motor setup
+    CANSparkMax leftFollowerMotor = new CANSparkMax(3, MotorType.kBrushed);
+    CANSparkMax rightMotor = new CANSparkMax(1, MotorType.kBrushed);
+    CANSparkMax rightFollowerMotor = new CANSparkMax(2, MotorType.kBrushed);
+    leftFollowerMotor.follow(leftMotor); // make the leftfollower motor follow the main left motor
+    rightFollowerMotor.follow(rightMotor);
+    rightMotor.setInverted(true); // Reverse right motors
+    driveInstance = new DifferentialDrive(leftMotor, rightMotor); // Drive instance with differential drive using both motors.
+    // Motor setup end
+    controllerInput = new XboxController(0); // Input for the controller, port 0 on driver station
   }
 
   /**
@@ -74,37 +66,23 @@ public class Robot extends TimedRobot {
    * SmartDashboard integrated updating.
    */
   @Override
-  public void robotPeriodic() {
-    if(hasLights) {
-      lightInstance.lightsPeriodic();
-    }
-  }
+  public void robotPeriodic() {}
 
   /** This function is called once when teleop is enabled. */
   @Override
   public void teleopInit() {
     //BREAK.set(true);
   }
-  double multiplier = 1;
-  double creepMultiplier;
   /** This function is called periodically during operator control. */
   @Override
   public void teleopPeriodic() {
-    if(isControllerMode) {
-      multiplier = input_controller.getRightBumperPressed() ? (multiplier * -1.0) : multiplier;
-      creepMultiplier = input_controller.getLeftTriggerAxis() > 0.5 ? kCreepSpeed : kBaseSpeed;
-
-      double inX = input_controller.getLeftX() * creepMultiplier;
-      double inY = input_controller.getLeftY() * creepMultiplier * multiplier;
-      driveInstance.arcadeDrive(inX, inY);
-      return;
-    }
-
-    multiplier = input.getRawButtonPressed(2) ? (multiplier * -1.0) : multiplier;
-    creepMultiplier = input.getRawButton(1) ? kCreepSpeed : kBaseSpeed;
-    double inX = input.getX() * creepMultiplier;
-    double inY = input.getY() * creepMultiplier * multiplier;
-    driveInstance.arcadeDrive(inX, inY);
+    speedMultiplier = controllerInput.getRightBumperPressed() ? (speedMultiplier * -1.0) : speedMultiplier; // An If statement for flip drive
+    creepMultiplier = controllerInput.getRightTriggerAxis() > 0.5 ? creepSpeed : baseSpeed; // An If statement for creep drive
+    double controllerY = controllerInput.getLeftY() * creepMultiplier * speedMultiplier; // Get Y input from left joystick
+    double controllerX = controllerInput.getRightX() * creepMultiplier; // Get X input from right joystick
+    leftAxisController = (controllerY + controllerX); // Driving math for left motors
+    rightAxisController = -(controllerY - controllerX); // Driving math for right motors
+    driveInstance.tankDrive(leftAxisController, rightAxisController); // Use the tank drive class to send the final outputs to the motors
   }
 
   /** This function is called once when the robot is disabled. */
